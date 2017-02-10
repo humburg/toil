@@ -18,7 +18,7 @@ import os
 import sys
 import uuid
 import shutil
-from subprocess import CalledProcessError, check_call
+from subprocess import CalledProcessError, check_call, PIPE, Popen, STDOUT
 import tempfile
 
 import toil
@@ -90,11 +90,16 @@ class UtilsTest(ToilTest):
             # specifying that here
             system([self.toilMain, 'launch-cluster', '--nodeType=t2.micro',
                     '--keyPairName=jenkins@jenkins-master', clusterName])
+
+            # ssh-cluster should prompt to
+            p = Popen([self.toilMain, 'ssh-cluster', '--provisioner=aws', clusterName], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+            assert "Are you sure you want to continue connecting" in p.stdout.readline()
+            p.communicate('yes')
         finally:
             system([self.toilMain, 'destroy-cluster', '--provisioner=aws', clusterName])
         try:
             from toil.provisioners.aws.awsProvisioner import AWSProvisioner
-            
+
             userTags = {'key1': 'value1', 'key2': 'value2', 'key3': 'value3'}
             tags = {'Name': clusterName, 'Owner': keyName}
             tags.update(userTags)
@@ -103,11 +108,24 @@ class UtilsTest(ToilTest):
             system([self.toilMain, 'launch-cluster', '-t', 'key1=value1', '-t', 'key2=value2', '--tag', 'key3=value3',
                     '--nodeType=m3.medium:0.2', '--keyPairName=' + keyName, clusterName,
                     '--provisioner=aws', '--logLevel=DEBUG'])
-            system([self.toilMain, 'ssh-cluster', '--provisioner=aws', clusterName])
 
             # test leader tags
             leaderTags = AWSProvisioner._getLeader(clusterName).tags
             self.assertEqual(tags, leaderTags)
+
+            # Test strict host key checking
+            try:
+                AWSProvisioner.sshLeader(clusterName=clusterName,
+                                         sshOptions=['-oStrictHostKeyChecking=yes'])
+            except RuntimeError:
+                pass
+            else:
+                self.fail("Host key verification passed where it should have failed.")
+
+            # Add the host key to known_hosts so that the rest of the tests can
+            # pass without choking on the verification prompt.
+            AWSProvisioner.sshLeader(clusterName=clusterName,
+                                     sshOptions=['-oStrictHostKeyChecking=no'])
 
             testStrings = ["'foo'",
                            '"foo"',
@@ -139,7 +157,7 @@ class UtilsTest(ToilTest):
             # `toil rsync-cluster`
             # Testing special characters - string.punctuation
             fname = '!"#$%&\'()*+,-.;<=>:\ ?@[\\\\]^_`{|}~'
-            testData = os.urandom(3*(10**6))
+            testData = os.urandom(3 * (10**6))
             with tempfile.NamedTemporaryFile(suffix=fname) as tmpFile:
                 relpath = os.path.basename(tmpFile.name)
                 tmpFile.write(testData)
