@@ -665,8 +665,8 @@ class AWSJobStore(AbstractJobStore):
             # https://github.com/BD2KGenomics/toil/issues/955
             # https://github.com/BD2KGenomics/toil/issues/995
             # https://github.com/BD2KGenomics/toil/issues/1093
-            return (isinstance(e, (S3CreateError, S3ResponseError))
-                    and e.error_code in ('BucketAlreadyOwnedByYou', 'OperationAborted'))
+            return (isinstance(e, (S3CreateError, S3ResponseError)) and
+                    e.error_code in ('BucketAlreadyOwnedByYou', 'OperationAborted'))
 
         bucketExisted = True
         for attempt in retry_s3(predicate=bucket_creation_pending):
@@ -778,8 +778,8 @@ class AWSJobStore(AbstractJobStore):
             :type ownerID: str
             :param ownerID: ID of the entity owning this file, typically a job ID aka jobStoreID
 
-            :type encrypted: bool
-            :param encrypted: whether the file is stored in encrypted form
+            :type encrypted: str|False|None
+            :param encrypted: encryption type ('sse' or 'sse-c') if the file is encrypted, False or None otherwise
 
             :type version: str|None
             :param version: a non-empty string containing the most recent version of the S3
@@ -911,12 +911,15 @@ class AWSJobStore(AbstractJobStore):
                 version = strOrNone(item['version'])
                 encrypted = strict_bool(encrypted)
                 content, numContentChunks = cls.attributesToBinary(item)
-                if encrypted:
+                if encrypted == "sse-c":
                     sseKeyPath = cls.outer.sseKeyPath
                     if sseKeyPath is None:
                         raise AssertionError('Content is encrypted but no key was provided.')
                     if content is not None:
                         content = encryption.decrypt(content, sseKeyPath)
+                elif encrypted == "sse":
+                    if content is not None:
+                        content = encryption.decrypt(content, seeKeyPath)
                 self = cls(fileID=item.name, ownerID=ownerID, encrypted=encrypted, version=version,
                            content=content, numContentChunks=numContentChunks)
                 return self
@@ -935,7 +938,7 @@ class AWSJobStore(AbstractJobStore):
                 attributes = {}
             else:
                 content = self.content
-                if self.encrypted:
+                if self.encrypted == "sse-c":
                     sseKeyPath = self.outer.sseKeyPath
                     if sseKeyPath is None:
                         raise AssertionError('Encryption requested but no key was provided.')
@@ -1217,8 +1220,8 @@ class AWSJobStore(AbstractJobStore):
                                                          version_id=self.previousVersion)
 
         def _s3EncryptionHeaders(self):
-            sseKeyPath = self.outer.sseKeyPath
-            if self.encrypted:
+            if self.encrypted == "sse-c":
+                sseKeyPath = self.outer.sseKeyPath
                 if sseKeyPath is None:
                     raise AssertionError('Content is encrypted but no key was provided.')
                 else:
@@ -1230,6 +1233,8 @@ class AWSJobStore(AbstractJobStore):
                     return {'x-amz-server-side-encryption-customer-algorithm': 'AES256',
                             'x-amz-server-side-encryption-customer-key': encodedSseKey,
                             'x-amz-server-side-encryption-customer-key-md5': encodedSseKeyMd5}
+            elif self.encrypted == "sse":
+                return {'x-amz-server-side-encryption': 'AES256'}
             else:
                 return {}
 

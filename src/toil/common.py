@@ -89,9 +89,9 @@ class Config(object):
         self.betaInertia = 1.2
         self.scaleInterval = 30
         self.preemptableCompensation = 0.0
-        
+
         # Parameters to limit service jobs, so preventing deadlock scheduling scenarios
-        self.maxPreemptableServiceJobs = sys.maxint 
+        self.maxPreemptableServiceJobs = sys.maxint
         self.maxServiceJobs = sys.maxint
         self.deadlockWait = 60 # Wait one minute before declaring a deadlock
 
@@ -115,6 +115,7 @@ class Config(object):
         self.maxLogFileSize = 64000
         self.writeLogs = None
         self.writeLogsGzip = None
+        self.sse = None
         self.sseKey = None
         self.cseKey = None
         self.servicePollingInterval = 60
@@ -224,7 +225,7 @@ class Config(object):
         require(0.0 <= self.preemptableCompensation <= 1.0,
                 '--preemptableCompensation (%f) must be >= 0.0 and <= 1.0',
                 self.preemptableCompensation)
-        
+
         # Parameters to limit service jobs / detect deadlocks
         setOption("maxServiceJobs", int)
         setOption("maxPreemptableServiceJobs", int)
@@ -413,8 +414,8 @@ def _addOptions(addGroupFn, config):
                       "missing preemptable nodes with a non-preemptable one. A value of 1.0 "
                       "replaces every missing pre-emptable node with a non-preemptable one." %
                       config.preemptableCompensation))
-    
-    #        
+
+    #
     # Parameters to limit service jobs / detect service deadlocks
     #
     addOptionFn = addGroupFn("toil options for limiting the number of service jobs and detecting service deadlocks",
@@ -517,9 +518,12 @@ def _addOptions(addGroupFn, config):
     addOptionFn("--realTimeLogging", dest="realTimeLogging", action="store_true", default=False,
                 help="Enable real-time logging from workers to masters")
 
+    addOptionFn("--sse", dest="sse", default=False,
+                help="Enable Amazon-managed server side encryption (SSE) on awsJobStore. Cannot be used"
+                     "at the same time as SSE-C (--sseKey).")
     addOptionFn("--sseKey", dest="sseKey", default=None,
-            help="Path to file containing 32 character key to be used for server-side encryption on awsJobStore. SSE will "
-                 "not be used if this flag is not passed.")
+                help="Path to file containing 32 character key to be used for server-side encryption "
+                "on awsJobStore. SSE will not be used if this flag is not passed.")
     addOptionFn("--cseKey", dest="cseKey", default=None,
                 help="Path to file containing 256-bit key to be used for client-side encryption on "
                 "azureJobStore. By default, no encryption is used.")
