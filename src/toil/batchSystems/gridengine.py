@@ -72,7 +72,9 @@ class GridEngineBatchSystem(AbstractGridEngineBatchSystem):
             # Once the job is complete it will disappear fron qstat output
             process = subprocess.Popen(["qstat"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             for line in process.stdout:
-                entries = line.split
+                entries = line.split()
+                if entries[0] == 'job-ID' or entries[0].startswith('---'):
+                    continue
                 if int(entries[0]) == job and (task is None or int(entries[9]) == task):
                     logger.debug("Waiting for job %d to complete", job)
                     return None
