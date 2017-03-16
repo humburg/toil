@@ -69,6 +69,14 @@ class GridEngineBatchSystem(AbstractGridEngineBatchSystem):
             if '.' in sgeJobID:
                 job, task = sgeJobID.split('.', 1)
 
+            # Once the job is complete it will disappear fron qstat output
+            process = subprocess.Popen(["qstat"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            for line in process.stdout:
+                entries = line.split
+                if int(entries[0]) == job and (task is None or int(entries[9]) == task):
+                    logger.debug("Waiting for job %d to complete", job)
+                    return None
+
             args = ["qacct", "-j", str(job)]
 
             if task is not None:
@@ -82,7 +90,10 @@ class GridEngineBatchSystem(AbstractGridEngineBatchSystem):
                 elif line.startswith("exit_status"):
                     logger.debug('Exit Status: %r', line.split()[1])
                     return int(line.split()[1])
-            return None
+
+            # Job is no longer running but qacct doesn't know about it
+            # (most likely because it is unavailable)
+            return 0
 
         """
         Implementation-specific helper methods
